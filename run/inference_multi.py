@@ -17,7 +17,7 @@ from src.utils.common import trace
 from src.utils.post_process import post_process_for_seg
 
 
-def load_model(cfg: DictConfig, fold) -> nn.Module:
+def load_model(cfg: DictConfig, weight_path) -> nn.Module:
     num_timesteps = nearest_valid_size(int(cfg.duration * cfg.upsample_rate), cfg.downsample_rate)
     model = get_model(
         cfg,
@@ -27,15 +27,8 @@ def load_model(cfg: DictConfig, fold) -> nn.Module:
     )
 
     # load weights
-    if cfg.weight is not None:
-        weight_path = (
-            Path(cfg.dir.model_dir)
-            / cfg.weight["exp_name"]
-            / f"run{fold}"
-            / cfg.weight["file_name"]
-        )
-        model.load_state_dict(torch.load(weight_path))
-        print('load weight from "{}"'.format(weight_path))
+    model.load_state_dict(torch.load(weight_path))
+    print('load weight from "{}"'.format(weight_path))
     return model
 
 
@@ -48,8 +41,9 @@ def get_test_dataloader(cfg: DictConfig) -> DataLoader:
     Returns:
         DataLoader: test dataloader
     """
-    feature_dir = Path(cfg.dir.processed_dir) / cfg.phase
+    feature_dir = Path("/kaggle/working/processed_data/test")
     series_ids = [x.name for x in feature_dir.glob("*")]
+    print(series_ids)
     chunk_features = load_chunk_features(
         duration=cfg.duration,
         feature_names=cfg.features,
@@ -70,7 +64,7 @@ def get_test_dataloader(cfg: DictConfig) -> DataLoader:
 
 
 def inference(
-    duration: int, loader: DataLoader, models: nn.Module, device: torch.device, use_amp
+    duration: int, loader: DataLoader, models: nn.Module, device: torch.device, use_amp, average_type
 ) -> tuple[list[str], np.ndarray]:
     for model in models:
         model = model.to(device)
@@ -82,12 +76,18 @@ def inference(
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=use_amp):
                 x = batch["feature"].to(device)
-                for idx, model in enumerate(models):
-                    if idx == 0:
-                        pred = model(x)["logits"].sigmoid()
-                    else:
-                        pred += model(x)["logits"].sigmoid()
-                pred /= len(models)
+                all_preds = []               
+                for model in models:
+                    pred = model(x)["logits"].sigmoid()
+                    all_preds.append(pred)
+
+                all_preds = torch.stack(all_preds, dim=0)
+                if average_type == 'median':
+                    pred, _ = torch.median(all_preds, dim=0)
+                elif average_type == 'mean':
+                    pred = torch.mean(all_preds, dim=0)
+                elif average_type == 'both':
+                    pred = (torch.median(all_preds, dim=0)[0] + torch.mean(all_preds, dim=0))/2
                 pred = resize(
                     pred.detach().cpu(),
                     size=[duration, pred.shape[2]],
@@ -123,13 +123,13 @@ def main(cfg: DictConfig):
         test_dataloader = get_test_dataloader(cfg)
     with trace("load model"):
         models = []
-        for fold in range(cfg.n_folds):
-            model = load_model(cfg, fold=fold)
+        for model_path in cfg.model_path_list:
+            model = load_model(cfg, model_path)
             models.append(model)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with trace("inference"):
-        keys, preds = inference(cfg.duration, test_dataloader, models, device, use_amp=cfg.use_amp)
+        keys, preds = inference(cfg.duration, test_dataloader, models, device, use_amp=cfg.use_amp, average_type=cfg.average_type)
 
     with trace("make submission"):
         sub_df = make_submission(
