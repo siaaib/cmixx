@@ -18,7 +18,7 @@ def post_process_for_seg(
     """
     series_ids = np.array(list(map(lambda x: x.split("_")[0], keys)))
     unique_series_ids = np.unique(series_ids)
-    round_step = lambda x: x if ((x // 12 < 4) or (x // 12 > 8)) else round(x / 12) * 12
+    round_step = lambda x: x if ((x // 12 < 2) or (x // 12 > 10)) else round(x / 12) * 12
     records = []
     for series_id in unique_series_ids:
         series_idx = np.where(series_ids == series_id)[0]
