@@ -1,0 +1,103 @@
+# ---------- Overriding hydra default configs ----------
+hydra:
+  job:
+    name: train
+    chdir: true
+  run:
+    dir: ${dir.output_dir}/${hydra.job.name}/${exp_name}/single
+  sweep:
+    dir: ${dir.output_dir}/${hydra.job.name}/${exp_name}
+    subdir: run${hydra.job.num}
+
+defaults:
+  - _self_
+  - dir: local
+  - model: Spec2DCNN
+  - feature_extractor: WaveNetSpectrogram #LSTMFeatureExtractor #
+  - decoder: UNet1DDecoderLSTM # UNet1DDecoderTransformer# # #UNet1DDecoder
+  - split: fold_0
+
+seed: 42
+exp_name: dummy
+duration: 17280 # duration * 5 = 秒数
+downsample_rate: 2
+upsample_rate: 1
+
+# training
+epoch: 50
+batch_size: 16
+num_workers: 4
+accelerator: auto
+use_amp: true
+debug: false
+gradient_clip_val: 1.0
+accumulate_grad_batches: 1
+monitor: val_score
+monitor_mode: max
+check_val_every_n_epoch: 1
+
+# Dataset
+offset: 9
+sigma: 6
+bg_sampling_rate: 0.5
+
+# augmentation
+augmentation:
+  mixup_prob: 0.0
+  mixup_alpha: 0.4
+  cutmix_prob: 0.0
+  cutmix_alpha: 0.4
+  
+# post_process
+post_process:
+  score_th: 0.005
+  distance: 40
+
+# label
+labels:
+  - "awake"
+  - "event_onset"
+  - "event_wakeup"
+
+# feature
+features:
+  - "minute"
+  - "anglez"
+  - "enmo"
+  - "anglez_sin"
+  - "anglez_cos"
+  - "hour_sin"
+  - "hour_cos"
+  # - "anglez_diff"
+  # - "anglez_diff_2"
+  # - "anglez_diff_4"
+  # - "anglez_diff_8"
+  - "anglez_diff_rolling_med_60"
+  - "anglez_diff_rolling_mean_60"
+  - "anglez_diff_rolling_max_60"
+  - "anglez_diff_rolling_min_60"
+  - "anglez_diff_rolling_max_min_60"
+  - "anglez_diff_rolling_std_60"
+  - "anglez_diff_rolling_quantile_25_60"
+  - "anglez_diff_rolling_quantile_975_60"
+  - "enmo_diff"
+  - "enmo_diff_2"
+  - "enmo_diff_4"
+  - "enmo_diff_8"
+  - "enmo_diff_rolling_med_60"
+  - "enmo_diff_rolling_mean_60"
+  - "enmo_diff_rolling_max_60"
+  - "enmo_diff_rolling_min_60"
+  - "enmo_diff_rolling_max_min_60"
+  - "enmo_diff_rolling_std_60"
+  - "enmo_diff_rolling_quantile_25_60"
+  - "enmo_diff_rolling_quantile_975_60"
+
+
+# optimizer
+optimizer:
+  lr: 0.0005
+
+# scheduler
+scheduler:
+  num_warmup_steps: 0
