@@ -18,7 +18,7 @@ def post_process_for_seg(
     """
     series_ids = np.array(list(map(lambda x: x.split("_")[0], keys)))
     unique_series_ids = np.unique(series_ids)
-
+    round_step = lambda x: x if ((x // 12 < 4) or (x // 12 > 8)) else round(x / 12) * 12
     records = []
     for series_id in unique_series_ids:
         series_idx = np.where(series_ids == series_id)[0]
@@ -28,7 +28,7 @@ def post_process_for_seg(
             this_event_preds = this_series_preds[:, i]
             steps = find_peaks(this_event_preds, height=score_th, distance=distance)[0]
             scores = this_event_preds[steps]
-
+            steps = [round_step(step) for step in steps]
             for step, score in zip(steps, scores):
                 records.append(
                     {
